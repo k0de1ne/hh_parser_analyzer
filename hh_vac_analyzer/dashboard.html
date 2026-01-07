@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ вакансий Go-разработчиков</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --card: #111;
+            --border: #222;
+            --text: #e5e5e5;
+            --muted: #666;
+            --accent: #3b82f6;
+            --green: #22c55e;
+            --yellow: #f59e0b;
+            --red: #ef4444;
+            --purple: #8b5cf6;
+            --cyan: #06b6d4;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            padding: 30px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
+
+        h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+        .subtitle { color: var(--muted); font-size: 13px; display: flex; gap: 20px; flex-wrap: wrap; }
+        .subtitle span { display: flex; align-items: center; gap: 6px; }
+
+        /* Executive Summary */
+        .exec-summary {
+            background: linear-gradient(135deg, #1a1a2e 0%, var(--card) 100%);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+        .exec-summary h2 {
+            font-size: 14px;
+            color: var(--accent);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .exec-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .exec-item {
+            padding: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+        .exec-item .label {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .exec-item .value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .exec-item .value.green { color: var(--green); }
+        .exec-item .value.blue { color: var(--accent); }
+        .exec-item .value.yellow { color: var(--yellow); }
+        .exec-item .context {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 3px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .section-subtitle {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .grid { display: grid; gap: 16px; }
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+        }
+
+        .chart-wrap { height: 260px; }
+        .chart-wrap-lg { height: 320px; }
+
+        /* Key Insight Box */
+        .insight-box {
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 3px solid var(--green);
+            padding: 12px 16px;
+            margin-top: 16px;
+            border-radius: 0 6px 6px 0;
+            font-size: 12px;
+        }
+        .insight-box.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left-color: var(--yellow);
+        }
+        .insight-box .title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Salary Visualization */
+        .salary-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .salary-box {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .salary-box .amount {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--green);
+        }
+        .salary-box .label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+        .salary-box .sublabel {
+            font-size: 10px;
+            color: var(--muted);
+            opacity: 0.7;
+        }
+
+        .percentile-bar {
+            position: relative;
+            height: 50px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        .percentile-range {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 20px;
+            background: linear-gradient(90deg, var(--accent), var(--green));
+            border-radius: 10px;
+        }
+        .percentile-marker {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: translateX(-50%);
+        }
+        .percentile-marker .line {
+            width: 2px;
+            flex: 1;
+            background: var(--text);
+        }
+        .percentile-marker.median .line {
+            width: 3px;
+            background: var(--green);
+        }
+        .percentile-marker .val {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            background: var(--card);
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* Data Quality Indicator */
+        .data-quality {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+        .quality-bar {
+            width: 60px;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .quality-bar .fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+        .quality-bar .fill.low { background: var(--red); }
+        .quality-bar .fill.medium { background: var(--yellow); }
+        .quality-bar .fill.high { background: var(--green); }
+
+        /* Progress bars */
+        .progress-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .progress-item {
+            display: grid;
+            grid-template-columns: 100px 1fr 50px;
+            align-items: center;
+            gap: 12px;
+        }
+        .progress-item .label {
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .progress-item .bar {
+            height: 22px;
+            background: var(--bg);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-item .bar .fill {
+            height: 100%;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #fff;
+            min-width: 30px;
+        }
+        .progress-item .pct {
+            font-size: 11px;
+            color: var(--muted);
+            text-align: right;
+        }
+
+        /* Color palette for bars */
+        .fill.c1 { background: linear-gradient(90deg, #22c55e, #16a34a); }
+        .fill.c2 { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+        .fill.c3 { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
+        .fill.c4 { background: linear-gradient(90deg, #f59e0b, #d97706); }
+        .fill.c5 { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+
+        /* Skills section */
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-input {
+            flex: 1;
+            min-width: 180px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-size: 12px;
+        }
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .filter-input::placeholder { color: var(--muted); }
+
+        .filter-btn {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--muted);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .filter-info {
+            font-size: 11px;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        .skills-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .skill-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: default;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .skill-tag:hover { border-color: var(--accent); }
+        .skill-tag .count {
+            background: var(--accent);
+            color: #fff;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .skill-tag.top-5 { border-color: var(--green); background: rgba(34, 197, 94, 0.1); }
+        .skill-tag.hidden { display: none; }
+
+        /* Tooltip для вариантов навыков */
+        .skill-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--card);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .skill-tag:hover .skill-tooltip {
+            opacity: 1;
+        }
+        .skill-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--accent);
+        }
+        .skill-tooltip-title {
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+        .skill-tooltip-item {
+            color: var(--text);
+            padding: 2px 0;
+        }
+        .skill-tooltip-item .variant-name {
+            color: var(--text);
+        }
+        .skill-tooltip-item .variant-count {
+            color: var(--muted);
+            margin-left: 6px;
+        }
+
+        /* Combo skills */
+        .combo-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .combo-item:last-child { border-bottom: none; }
+        .combo-pair {
+            display: flex;
+            gap: 4px;
+        }
+        .combo-skill {
+            background: var(--accent);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .combo-bar {
+            flex: 1;
+            max-width: 120px;
+            height: 4px;
+            background: var(--bg);
+            border-radius: 2px;
+        }
+        .combo-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+        .combo-count {
+            font-size: 11px;
+            color: var(--muted);
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0;
+        }
+        .tab {
+            padding: 8px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+        .tab .badge {
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 6px;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Lists */
+        .searchable-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .list-item:last-child { border-bottom: none; }
+        .list-item.hidden { display: none; }
+        .list-item .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+        .list-item .count {
+            background: var(--bg);
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        /* Role cards */
+        .role-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 10px;
+        }
+        .role-card {
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 14px 10px;
+            text-align: center;
+        }
+        .role-card .num {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .role-card .name {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+        .role-card .pct {
+            font-size: 10px;
+            color: var(--green);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .loading { text-align: center; padding: 60px; color: var(--muted); }
+
+        /* Actionable insights */
+        .action-insights {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .action-card {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 3px solid var(--accent);
+        }
+        .action-card.success { border-left-color: var(--green); }
+        .action-card.warning { border-left-color: var(--yellow); }
+        .action-card .title {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .action-card .content {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .action-card .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 10px;
+        }
+        .action-card .tag {
+            background: var(--card);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            h1 { font-size: 20px; }
+            .exec-grid { grid-template-columns: repeat(2, 1fr); }
+            .salary-breakdown { grid-template-columns: 1fr; }
+            .progress-item { grid-template-columns: 80px 1fr 40px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Анализ рынка Go-разработчиков</h1>
+        <p class="subtitle">
+            <span id="metaInfo"></span>
+        </p>
+    </header>
+
+    <div id="loading" class="loading">Загрузка данных...</div>
+
+    <main id="main" style="display: none;">
+        <!-- Executive Summary -->
+        <div class="exec-summary">
+            <h2>Ключевые метрики</h2>
+            <div class="exec-grid" id="execGrid"></div>
+        </div>
+
+        <!-- Actionable Insights -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Практические выводы</div>
+            </div>
+            <div class="action-insights" id="actionInsights"></div>
+        </section>
+
+        <!-- Salary Analysis -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Анализ зарплат</div>
+                <div class="section-subtitle" id="salaryMeta"></div>
+            </div>
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Диапазон зарплат (нетто, руб/мес)</div>
+                        <div class="data-quality" id="salaryQuality"></div>
+                    </div>
+                    <div id="salaryBreakdown"></div>
+                    <div id="percentileBar"></div>
+                    <div class="insight-box" id="salaryInsight"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Распределение по диапазонам</div>
+                    </div>
+                    <div class="chart-wrap"><canvas id="salaryDistChart"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Salary by Experience -->
+        <section class="section">
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Зарплата по уровню опыта</div>
+                    </div>
+                    <div class="chart-wrap"><canvas id="salaryExpChart"></canvas></div>
+                    <div class="insight-box warning" id="expSalaryInsight"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Распределение по опыту</div>
+                        <div class="card-badge" id="expBadge"></div>
+                    </div>
+                    <div class="progress-list" id="expProgress"></div>
+                    <div class="insight-box" id="expInsight"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Skills Analysis -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Анализ навыков</div>
+                <div class="section-subtitle" id="skillsMeta"></div>
+            </div>
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Топ-15 востребованных навыков</div>
+                    </div>
+                    <div class="chart-wrap-lg"><canvas id="skillsChart"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Роли и грейды</div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase;">Тип позиции</div>
+                        <div class="role-cards" id="rolesGrid"></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase;">Уровень</div>
+                        <div class="role-cards" id="seniorityGrid"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- All Skills with Filters -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Все навыки</div>
+            </div>
+            <div class="card">
+                <div class="tabs">
+                    <div class="tab active" data-tab="tech">Технические<span class="badge" id="techBadge"></span></div>
+                    <div class="tab" data-tab="soft">Soft Skills<span class="badge" id="softBadge"></span></div>
+                    <div class="tab" data-tab="lang">Языки<span class="badge" id="langBadge"></span></div>
+                    <div class="tab" data-tab="combos">Связки навыков</div>
+                </div>
+
+                <div id="tech" class="tab-content active">
+                    <div class="filter-row">
+                        <input type="text" class="filter-input" id="techFilter" placeholder="Поиск навыка...">
+                        <button class="filter-btn active" data-min="0" onclick="filterByMin('tech', 0)">Все</button>
+                        <button class="filter-btn" data-min="5" onclick="filterByMin('tech', 5)">5+</button>
+                        <button class="filter-btn" data-min="10" onclick="filterByMin('tech', 10)">10+</button>
+                        <button class="filter-btn" data-min="20" onclick="filterByMin('tech', 20)">20+</button>
+                        <span class="filter-info" id="techInfo"></span>
+                    </div>
+                    <div class="skills-grid" id="techSkills"></div>
+                </div>
+
+                <div id="soft" class="tab-content">
+                    <div class="skills-grid" id="softSkills"></div>
+                </div>
+
+                <div id="lang" class="tab-content">
+                    <div class="skills-grid" id="langSkills"></div>
+                </div>
+
+                <div id="combos" class="tab-content">
+                    <div class="filter-row">
+                        <input type="text" class="filter-input" id="comboFilter" placeholder="Фильтр по навыку...">
+                    </div>
+                    <div id="combosList"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Keywords from Descriptions -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Ключевые слова из описаний</div>
+                <div class="section-subtitle">Частота упоминания технологий и практик</div>
+            </div>
+            <div class="card">
+                <div class="progress-list" id="keywordsProgress"></div>
+            </div>
+        </section>
+
+        <!-- Companies & Geography -->
+        <section class="section">
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Топ работодателей</div>
+                        <div class="card-badge" id="companyBadge"></div>
+                    </div>
+                    <div class="filter-row">
+                        <input type="text" class="filter-input" id="companyFilter" placeholder="Поиск компании...">
+                    </div>
+                    <div class="searchable-list" id="companiesList"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">География и формат</div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase;">Формат работы</div>
+                        <div class="progress-list" id="workFormat"></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase;">Города</div>
+                        <div class="filter-row">
+                            <input type="text" class="filter-input" id="locationFilter" placeholder="Поиск города...">
+                        </div>
+                        <div class="searchable-list" id="locationsList"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Job Titles -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Названия вакансий</div>
+            </div>
+            <div class="card">
+                <div class="filter-row">
+                    <input type="text" class="filter-input" id="titleFilter" placeholder="Поиск по названию...">
+                    <span class="filter-info" id="titleInfo"></span>
+                </div>
+                <div class="searchable-list" id="titlesList" style="max-height: 400px;"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        Chart.defaults.color = '#666';
+        Chart.defaults.borderColor = '#222';
+        const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+
+        let DATA = null;
+        let filterState = { tech: { min: 0, search: '' } };
+
+        const fmt = n => n != null ? n.toLocaleString('ru-RU') + ' ₽' : '—';
+        const fmtK = n => n != null ? Math.round(n / 1000) + 'k ₽' : '—';
+        const pct = (v, t) => t > 0 ? ((v / t) * 100).toFixed(1) + '%' : '0%';
+
+        async function init() {
+            try {
+                const res = await fetch('analysis_results.json?v=' + new Date().getTime());
+                DATA = await res.json();
+                render(DATA);
+            } catch (e) {
+                document.getElementById('loading').textContent = 'Ошибка: ' + e.message;
+            }
+        }
+
+        function render(d) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('main').style.display = 'block';
+
+            // Meta info
+            document.getElementById('metaInfo').innerHTML = `
+                <span>Источник: hh.ru</span>
+                <span>Вакансий: ${d.meta.total}</span>
+                <span>Дата: ${d.meta.analyzed_at}</span>
+            `;
+
+            renderExecSummary(d);
+            renderActionInsights(d);
+            renderSalarySection(d.salaries, d.meta.total);
+            renderExpSection(d.experience, d.salaries.by_experience, d.meta.total);
+            renderSkillsChart(d.skills.technical.slice(0, 15));
+            renderRolesAndSeniority(d.titles);
+            renderAllSkills(d.skills);
+            renderKeywords(d.descriptions.keywords, d.meta.total);
+            renderCompanies(d.companies);
+            renderLocations(d.locations, d.meta.total);
+            renderTitles(d.titles.all);
+
+            setupTabs();
+            setupFilters();
+        }
+
+        function renderExecSummary(d) {
+            const salaryDataPct = (d.salaries.with_salary / d.meta.total * 100).toFixed(0);
+            const mostCommonExp = Object.entries(d.experience).sort((a,b) => b[1] - a[1])[0];
+            const topSkill = d.skills.technical[0];
+
+            const items = [
+                {
+                    label: 'Медиана зарплаты',
+                    value: fmt(d.salaries.median),
+                    valueClass: 'green',
+                    context: `Данные по ${d.salaries.with_salary} вакансиям (${salaryDataPct}%)`
+                },
+                {
+                    label: 'Диапазон 25-75%',
+                    value: `${fmtK(d.salaries.p25)} – ${fmtK(d.salaries.p75)}`,
+                    valueClass: 'blue',
+                    context: 'Интерквартильный размах'
+                },
+                {
+                    label: 'Типичный опыт',
+                    value: mostCommonExp[0],
+                    valueClass: 'yellow',
+                    context: `${mostCommonExp[1]} вакансий (${pct(mostCommonExp[1], d.meta.total)})`
+                },
+                {
+                    label: 'Топ навык',
+                    value: topSkill[0],
+                    valueClass: 'blue',
+                    context: `${topSkill[1]} упоминаний (${pct(topSkill[1], d.meta.total)})`
+                },
+                {
+                    label: 'Удалёнка',
+                    value: d.locations.remote_percent + '%',
+                    valueClass: 'green',
+                    context: `${d.locations.remote_mentions} вакансий`
+                }
+            ];
+
+            document.getElementById('execGrid').innerHTML = items.map(x => `
+                <div class="exec-item">
+                    <div class="label">${x.label}</div>
+                    <div class="value ${x.valueClass}">${x.value}</div>
+                    <div class="context">${x.context}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderActionInsights(d) {
+            const topSkills = d.skills.technical.slice(0, 5).map(s => s[0]);
+            const topCombo = d.skills.combinations[0];
+            const seniorPct = d.titles.seniority['Senior'] ? pct(d.titles.seniority['Senior'], d.meta.total) : '0%';
+            const salaryGrowth = d.salaries.by_experience['более 6 лет'] && d.salaries.by_experience['1–3 года']
+                ? Math.round((d.salaries.by_experience['более 6 лет'].median / d.salaries.by_experience['1–3 года'].median - 1) * 100)
+                : 0;
+
+            const insights = [
+                {
+                    type: 'success',
+                    title: 'Ключевые навыки для резюме',
+                    content: 'Эти навыки встречаются чаще всего и должны быть в вашем резюме:',
+                    tags: topSkills
+                },
+                {
+                    type: 'success',
+                    title: 'Лучшая связка навыков',
+                    content: `${topCombo[0][0]} + ${topCombo[0][1]} — встречаются вместе в ${topCombo[1]} вакансиях. Изучите оба для максимального охвата.`,
+                    tags: topCombo[0]
+                },
+                {
+                    type: 'warning',
+                    title: 'Рост зарплаты с опытом',
+                    content: salaryGrowth > 0
+                        ? `Переход от 1-3 лет к 6+ годам опыта увеличивает медианную зарплату на ~${salaryGrowth}%.`
+                        : 'Недостаточно данных для расчёта роста.',
+                    tags: []
+                },
+                {
+                    type: '',
+                    title: 'Уровень позиций',
+                    content: `${seniorPct} вакансий для Senior+ уровня. Большинство позиций требуют опыт 3-6 лет.`,
+                    tags: []
+                }
+            ];
+
+            document.getElementById('actionInsights').innerHTML = insights.map(i => `
+                <div class="action-card ${i.type}">
+                    <div class="title">${i.title}</div>
+                    <div class="content">${i.content}</div>
+                    ${i.tags.length ? `<div class="tags">${i.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function renderSalarySection(sal, total) {
+            const dataPct = (sal.with_salary / total * 100);
+            let qualityClass = dataPct > 30 ? 'high' : dataPct > 15 ? 'medium' : 'low';
+
+            document.getElementById('salaryMeta').textContent =
+                `${sal.with_salary} из ${total} вакансий с указанной зарплатой (${dataPct.toFixed(0)}%)`;
+
+            document.getElementById('salaryQuality').innerHTML = `
+                <span>Качество данных:</span>
+                <div class="quality-bar"><div class="fill ${qualityClass}" style="width: ${Math.min(dataPct * 2, 100)}%"></div></div>
+                <span>${dataPct.toFixed(0)}%</span>
+            `;
+
+            document.getElementById('salaryBreakdown').innerHTML = `
+                <div class="salary-breakdown">
+                    <div class="salary-box">
+                        <div class="amount">${fmt(sal.median)}</div>
+                        <div class="label">Медиана</div>
+                        <div class="sublabel">50% получают больше</div>
+                    </div>
+                    <div class="salary-box">
+                        <div class="amount">${fmtK(sal.p25)} – ${fmtK(sal.p75)}</div>
+                        <div class="label">Типичный диапазон</div>
+                        <div class="sublabel">25-75 перцентиль</div>
+                    </div>
+                </div>
+            `;
+
+            // Percentile bar
+            const range = sal.p90 - sal.p10;
+            const getPos = v => ((v - sal.p10) / range * 100);
+
+            document.getElementById('percentileBar').innerHTML = `
+                <div class="percentile-bar">
+                    <div class="percentile-range" style="left: ${getPos(sal.p25)}%; width: ${getPos(sal.p75) - getPos(sal.p25)}%;"></div>
+                    <div class="percentile-marker" style="left: 0%"><div class="val">${fmtK(sal.p10)}</div><div class="line"></div></div>
+                    <div class="percentile-marker median" style="left: ${getPos(sal.median)}%"><div class="val" style="background: var(--green);">${fmtK(sal.median)}</div><div class="line"></div></div>
+                    <div class="percentile-marker" style="left: 100%"><div class="val">${fmtK(sal.p90)}</div><div class="line"></div></div>
+                </div>
+            `;
+
+            document.getElementById('salaryInsight').innerHTML = `
+                <div class="title">Вывод</div>
+                80% зарплат находятся в диапазоне ${fmtK(sal.p10)} – ${fmtK(sal.p90)}. Медиана ${fmt(sal.median)} — ориентир для переговоров.
+            `;
+
+            // Distribution chart
+            new Chart(document.getElementById('salaryDistChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(sal.distribution),
+                    datasets: [{
+                        data: Object.values(sal.distribution),
+                        backgroundColor: Object.values(sal.distribution).map((v, i, arr) => {
+                            const max = Math.max(...arr);
+                            return v === max ? colors[1] : 'rgba(34, 197, 94, 0.4)';
+                        }),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.raw} вакансий (${pct(ctx.raw, sal.with_salary)})`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: '#222' }, title: { display: true, text: 'Вакансий' } }
+                    }
+                }
+            });
+        }
+
+        function renderExpSection(exp, byExp, total) {
+            // Find most common
+            const sorted = Object.entries(exp).sort((a,b) => b[1] - a[1]);
+            const maxVal = sorted[0][1];
+
+            document.getElementById('expBadge').textContent = `Чаще: ${sorted[0][0]}`;
+
+            const colorMap = { 'не требуется': 'c1', '1–3 года': 'c2', '3–6 лет': 'c3', 'более 6 лет': 'c4' };
+
+            document.getElementById('expProgress').innerHTML = sorted.map(([k, v]) => `
+                <div class="progress-item">
+                    <div class="label">${k}</div>
+                    <div class="bar">
+                        <div class="fill ${colorMap[k] || 'c1'}" style="width: ${v/maxVal*100}%">${v}</div>
+                    </div>
+                    <div class="pct">${pct(v, total)}</div>
+                </div>
+            `).join('');
+
+            const midExp = exp['3–6 лет'] || 0;
+            const seniorExp = exp['более 6 лет'] || 0;
+            document.getElementById('expInsight').innerHTML = `
+                <div class="title">Вывод</div>
+                ${pct(midExp + seniorExp, total)} вакансий требуют опыт от 3 лет. Рынок ориентирован на опытных специалистов.
+            `;
+
+            // Salary by experience chart
+            const expOrder = ['1–3 года', '3–6 лет', 'более 6 лет'];
+            const expLabels = expOrder.filter(k => byExp[k]);
+
+            if (expLabels.length > 0) {
+                new Chart(document.getElementById('salaryExpChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: expLabels,
+                        datasets: [
+                            {
+                                label: 'P25',
+                                data: expLabels.map(k => byExp[k].p25),
+                                backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'Медиана',
+                                data: expLabels.map(k => byExp[k].median),
+                                backgroundColor: colors[1],
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'P75',
+                                data: expLabels.map(k => byExp[k].p75),
+                                backgroundColor: 'rgba(139, 92, 246, 0.5)',
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+                        },
+                        scales: {
+                            x: { grid: { display: false } },
+                            y: { grid: { color: '#222' }, ticks: { callback: v => fmtK(v) } }
+                        }
+                    }
+                });
+
+                const junior = byExp['1–3 года']?.median || 0;
+                const senior = byExp['более 6 лет']?.median || 0;
+                const growth = junior > 0 ? Math.round((senior / junior - 1) * 100) : 0;
+
+                document.getElementById('expSalaryInsight').innerHTML = `
+                    <div class="title">Рост зарплаты</div>
+                    ${growth > 0
+                        ? `Медиана растёт на ~${growth}% при переходе от 1-3 лет к 6+ годам опыта. Инвестируйте в навыки.`
+                        : 'Недостаточно данных для анализа роста.'}
+                `;
+            }
+        }
+
+        function renderSkillsChart(skills) {
+            document.getElementById('skillsMeta').textContent =
+                `${DATA.skills.unique_normalized} уникальных навыков, ${DATA.skills.total_mentions} упоминаний`;
+
+            new Chart(document.getElementById('skillsChart'), {
+                type: 'bar',
+                data: {
+                    labels: skills.map(s => s[0]),
+                    datasets: [{
+                        data: skills.map(s => s[1]),
+                        backgroundColor: skills.map((_, i) => i < 5 ? colors[1] : colors[0]),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.raw} упоминаний (${pct(ctx.raw, DATA.meta.total)})`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: '#222' }, title: { display: true, text: 'Упоминаний' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderRolesAndSeniority(titles) {
+            const roleTotal = Object.values(titles.roles).reduce((a,b) => a+b, 0);
+            document.getElementById('rolesGrid').innerHTML = Object.entries(titles.roles)
+                .sort((a,b) => b[1] - a[1])
+                .map(([k, v]) => `
+                    <div class="role-card">
+                        <div class="num">${v}</div>
+                        <div class="name">${k}</div>
+                        <div class="pct">${pct(v, roleTotal)}</div>
+                    </div>
+                `).join('');
+
+            const senTotal = Object.values(titles.seniority).reduce((a,b) => a+b, 0);
+            const senOrder = ['Junior', 'Middle', 'Senior', 'Lead', 'Architect'];
+            document.getElementById('seniorityGrid').innerHTML = senOrder
+                .filter(s => titles.seniority[s])
+                .map(s => {
+                    const v = titles.seniority[s];
+                    return `
+                        <div class="role-card">
+                            <div class="num">${v}</div>
+                            <div class="name">${s}</div>
+                            <div class="pct">${pct(v, senTotal)}</div>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        function renderAllSkills(skills) {
+            const renderTags = (list, containerId, topN = 5) => {
+                document.getElementById(containerId).innerHTML = list.map((s, i) => {
+                    const skillName = s[0];
+                    const totalCount = s[1];
+
+                    return `<div class="skill-tag ${i < topN ? 'top-5' : ''}" data-count="${totalCount}" data-name="${skillName.toLowerCase()}">
+                        <span>${skillName}</span>
+                        <span class="count">${totalCount}</span>
+                    </div>`;
+                }).join('');
+            };
+
+            renderTags(skills.technical, 'techSkills');
+            renderTags(skills.soft, 'softSkills', 3);
+            renderTags(skills.languages, 'langSkills', 2);
+
+            document.getElementById('techBadge').textContent = skills.technical.length;
+            document.getElementById('softBadge').textContent = skills.soft.length;
+            document.getElementById('langBadge').textContent = skills.languages.length;
+            document.getElementById('techInfo').textContent = `${skills.technical.length} навыков`;
+
+            // Combos
+            const maxCombo = skills.combinations[0]?.[1] || 1;
+            document.getElementById('combosList').innerHTML = skills.combinations.slice(0, 20).map(c => `
+                <div class="combo-item" data-skills="${c[0][0].toLowerCase()} ${c[0][1].toLowerCase()}">
+                    <div class="combo-pair">
+                        <span class="combo-skill">${c[0][0]}</span>
+                        <span class="combo-skill">${c[0][1]}</span>
+                    </div>
+                    <div class="combo-bar"><div class="combo-bar-fill" style="width: ${c[1]/maxCombo*100}%"></div></div>
+                    <span class="combo-count">${c[1]}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderKeywords(kw, total) {
+            const sorted = Object.entries(kw).sort((a,b) => b[1] - a[1]);
+            const maxVal = sorted[0]?.[1] || 1;
+
+            const kwColors = ['c1', 'c2', 'c3', 'c4', 'c5'];
+
+            document.getElementById('keywordsProgress').innerHTML = sorted.map(([k, v], i) => `
+                <div class="progress-item">
+                    <div class="label">${k}</div>
+                    <div class="bar">
+                        <div class="fill ${kwColors[i % kwColors.length]}" style="width: ${v/maxVal*100}%">${v}</div>
+                    </div>
+                    <div class="pct">${pct(v, total)}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderCompanies(companies) {
+            document.getElementById('companyBadge').textContent = `${companies.total} компаний`;
+            document.getElementById('companiesList').innerHTML = companies.all.slice(0, 50).map(c => `
+                <div class="list-item" data-name="${c[0].toLowerCase()}">
+                    <span class="name">${c[0]}</span>
+                    <span class="count">${c[1]} вак.</span>
+                </div>
+            `).join('');
+        }
+
+        function renderLocations(loc, total) {
+            const formats = [
+                { label: 'Удалённая работа', val: loc.remote_mentions },
+                { label: 'Гибридный формат', val: loc.hybrid_mentions }
+            ];
+            const maxF = Math.max(...formats.map(f => f.val));
+
+            document.getElementById('workFormat').innerHTML = formats.map((f, i) => `
+                <div class="progress-item">
+                    <div class="label">${f.label}</div>
+                    <div class="bar">
+                        <div class="fill c${i+1}" style="width: ${f.val/maxF*100}%">${f.val}</div>
+                    </div>
+                    <div class="pct">${pct(f.val, total)}</div>
+                </div>
+            `).join('');
+
+            const cities = Object.entries(loc.cities).filter(([k]) => k !== 'Не указан');
+            document.getElementById('locationsList').innerHTML = cities.map(([k, v]) => `
+                <div class="list-item" data-name="${k.toLowerCase()}">
+                    <span class="name">${k}</span>
+                    <span class="count">${v}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderTitles(titles) {
+            const counts = {};
+            titles.forEach(t => { counts[t[0]] = (counts[t[0]] || 0) + 1; });
+            const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
+
+            document.getElementById('titleInfo').textContent = `${sorted.length} уникальных названий`;
+            document.getElementById('titlesList').innerHTML = sorted.map(([t, c]) => `
+                <div class="list-item" data-name="${t.toLowerCase()}">
+                    <span class="name">${t}</span>
+                    <span class="count">${c}</span>
+                </div>
+            `).join('');
+        }
+
+        function setupTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const parent = tab.closest('.card');
+                    parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    parent.querySelector('#' + tab.dataset.tab).classList.add('active');
+                });
+            });
+        }
+
+        function setupFilters() {
+            // Tech skills
+            document.getElementById('techFilter').addEventListener('input', e => {
+                filterState.tech.search = e.target.value.toLowerCase();
+                applyTechFilter();
+            });
+
+            // Combos
+            document.getElementById('comboFilter').addEventListener('input', e => {
+                const s = e.target.value.toLowerCase();
+                document.querySelectorAll('#combosList .combo-item').forEach(el => {
+                    el.style.display = el.dataset.skills.includes(s) ? 'flex' : 'none';
+                });
+            });
+
+            // Lists
+            ['company', 'location', 'title'].forEach(type => {
+                document.getElementById(type + 'Filter').addEventListener('input', e => {
+                    filterList(type + 'sList', e.target.value);
+                    if (type === 'title') updateTitleCount();
+                });
+            });
+        }
+
+        function filterByMin(type, min) {
+            filterState[type].min = min;
+            document.querySelectorAll(`#${type} .filter-btn`).forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.min) === min);
+            });
+            applyTechFilter();
+        }
+
+        function applyTechFilter() {
+            const { search, min } = filterState.tech;
+            const tags = document.querySelectorAll('#techSkills .skill-tag');
+            let visible = 0;
+
+            tags.forEach(tag => {
+                const name = tag.dataset.name;
+                const count = parseInt(tag.dataset.count);
+                const match = (!search || name.includes(search)) && count >= min;
+                tag.classList.toggle('hidden', !match);
+                if (match) visible++;
+            });
+
+            document.getElementById('techInfo').textContent = `${visible} из ${tags.length}`;
+        }
+
+        function filterList(listId, search) {
+            const s = search.toLowerCase();
+            document.querySelectorAll(`#${listId} .list-item`).forEach(item => {
+                item.classList.toggle('hidden', !item.dataset.name.includes(s));
+            });
+        }
+
+        function updateTitleCount() {
+            const visible = document.querySelectorAll('#titlesList .list-item:not(.hidden)').length;
+            const total = document.querySelectorAll('#titlesList .list-item').length;
+            document.getElementById('titleInfo').textContent = `${visible} из ${total}`;
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -744,6 +744,8 @@
                     <div class="tab" data-tab="soft">Soft Skills<span class="badge" id="softBadge"></span></div>
                     <div class="tab" data-tab="lang">Языки<span class="badge" id="langBadge"></span></div>
                     <div class="tab" data-tab="combos">Связки навыков</div>
+                    <div class="tab" data-tab="mandatory">Обязательные<span class="badge" id="mandatoryBadge"></span></div>
+                    <div class="tab" data-tab="preferred">Желательные<span class="badge" id="preferredBadge"></span></div>
                 </div>
 
                 <div id="tech" class="tab-content active">
@@ -771,6 +773,13 @@
                         <input type="text" class="filter-input" id="comboFilter" placeholder="Фильтр по навыку...">
                     </div>
                     <div id="combosList"></div>
+                </div>
+
+                <div id="mandatory" class="tab-content">
+                    <div class="skills-grid" id="mandatorySkills"></div>
+                </div>
+                <div id="preferred" class="tab-content">
+                    <div class="skills-grid" id="preferredSkills"></div>
                 </div>
             </div>
         </section>
@@ -815,6 +824,17 @@
                         <div class="searchable-list" id="locationsList"></div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Keywords from Descriptions -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">Динамические ключевые слова</div>
+                <div class="section-subtitle">Биграммы, найденные в описаниях вакансий</div>
+            </div>
+            <div class="card">
+                <div class="skills-grid" id="dynamicKeywordsGrid"></div>
             </div>
         </section>
 
@@ -870,11 +890,14 @@
             renderActionInsights(d);
             renderSalarySection(d.salaries, d.meta.total);
             renderExpSection(d.experience, d.salaries.by_experience, d.meta.total);
-            renderSkillsChart(d.skills.technical.slice(0, 15));
+            const techSkillsForChart = Object.entries(d.skills.technical).map(([name, data]) => [name, data.total_count]);
+            renderSkillsChart(techSkillsForChart.slice(0, 15));
             renderRolesAndSeniority(d.titles);
             renderAllSkills(d.skills);
             renderKeywords(d.descriptions.keywords, d.meta.total);
             renderCompanies(d.companies);
+            renderDynamicKeywords(d.dynamic_keywords.top_bigrams); // NEW
+            renderSkillContext(d.skill_context); // NEW
             renderLocations(d.locations, d.meta.total);
             renderTitles(d.titles.all);
 
@@ -885,7 +908,8 @@
         function renderExecSummary(d) {
             const salaryDataPct = (d.salaries.with_salary / d.meta.total * 100).toFixed(0);
             const mostCommonExp = Object.entries(d.experience).sort((a,b) => b[1] - a[1])[0];
-            const topSkill = d.skills.technical[0];
+            const topSkillData = Object.entries(d.skills.technical).sort((a, b) => b[1].total_count - a[1].total_count)[0];
+            const topSkill = [topSkillData[0], topSkillData[1].total_count];
 
             const items = [
                 {
@@ -930,7 +954,7 @@
         }
 
         function renderActionInsights(d) {
-            const topSkills = d.skills.technical.slice(0, 5).map(s => s[0]);
+            const topSkills = Object.keys(d.skills.technical).slice(0, 5);
             const topCombo = d.skills.combinations[0];
             const seniorPct = d.titles.seniority['Senior'] ? pct(d.titles.seniority['Senior'], d.meta.total) : '0%';
             const salaryGrowth = d.salaries.by_experience['более 6 лет'] && d.salaries.by_experience['1–3 года']
@@ -1200,14 +1224,30 @@
         }
 
         function renderAllSkills(skills) {
-            const renderTags = (list, containerId, topN = 5) => {
-                document.getElementById(containerId).innerHTML = list.map((s, i) => {
-                    const skillName = s[0];
-                    const totalCount = s[1];
+            const renderTags = (skillsDict, containerId, topN = 5) => {
+                const container = document.getElementById(containerId);
+                if (!skillsDict || Object.keys(skillsDict).length === 0) {
+                    container.innerHTML = '<p style="color: var(--muted); font-size: 12px;">Нет данных для отображения.</p>';
+                    return;
+                }
 
-                    return `<div class="skill-tag ${i < topN ? 'top-5' : ''}" data-count="${totalCount}" data-name="${skillName.toLowerCase()}">
-                        <span>${skillName}</span>
+                const sortedSkills = Object.entries(skillsDict).sort((a, b) => b[1].total_count - a[1].total_count);
+
+                container.innerHTML = sortedSkills.map(([canonicalName, data], i) => {
+                    const totalCount = data.total_count;
+                    const variants = data.variants;
+
+                    const tooltipHtml = (variants && variants.length > 1)
+                        ? `<div class="skill-tooltip">
+                               <div class="skill-tooltip-title">Варианты</div>
+                               ${variants.map(v => `<div class="skill-tooltip-item">${v[0]} <span class="variant-count">(${v[1]})</span></div>`).join('')}
+                           </div>`
+                        : '';
+
+                    return `<div class="skill-tag ${i < topN ? 'top-5' : ''}" data-count="${totalCount}" data-name="${canonicalName.toLowerCase()}">
+                        <span>${canonicalName}</span>
                         <span class="count">${totalCount}</span>
+                        ${tooltipHtml}
                     </div>`;
                 }).join('');
             };
@@ -1216,10 +1256,10 @@
             renderTags(skills.soft, 'softSkills', 3);
             renderTags(skills.languages, 'langSkills', 2);
 
-            document.getElementById('techBadge').textContent = skills.technical.length;
-            document.getElementById('softBadge').textContent = skills.soft.length;
-            document.getElementById('langBadge').textContent = skills.languages.length;
-            document.getElementById('techInfo').textContent = `${skills.technical.length} навыков`;
+            document.getElementById('techBadge').textContent = Object.keys(skills.technical || {}).length;
+            document.getElementById('softBadge').textContent = Object.keys(skills.soft || {}).length;
+            document.getElementById('langBadge').textContent = Object.keys(skills.languages || {}).length;
+            document.getElementById('techInfo').textContent = `${Object.keys(skills.technical || {}).length} навыков`;
 
             // Combos
             const maxCombo = skills.combinations[0]?.[1] || 1;
@@ -1233,6 +1273,44 @@
                     <span class="combo-count">${c[1]}</span>
                 </div>
             `).join('');
+        }
+        
+        // NEW FUNCTION for rendering dynamic keywords
+        function renderDynamicKeywords(bigrams) {
+            const container = document.getElementById('dynamicKeywordsGrid');
+            if (bigrams && Object.keys(bigrams).length > 0) {
+                container.innerHTML = Object.entries(bigrams).map(([bigram, count]) => `
+                    <div class="skill-tag" data-count="${count}" data-name="${bigram.toLowerCase()}">
+                        <span>${bigram}</span>
+                        <span class="count">${count}</span>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="muted">Динамические ключевые слова не найдены.</p>';
+            }
+        }
+
+        // NEW FUNCTION for rendering skill context
+        function renderSkillContext(skillContext) {
+            const renderContextTags = (list, containerId, badgeId) => {
+                const container = document.getElementById(containerId);
+                const badge = document.getElementById(badgeId);
+                if (list && list.length > 0) {
+                    container.innerHTML = list.map(s => `
+                        <div class="skill-tag" data-count="${s[1]}" data-name="${s[0].toLowerCase()}">
+                            <span>${s[0]}</span>
+                            <span class="count">${s[1]}</span>
+                        </div>
+                    `).join('');
+                    badge.textContent = list.length;
+                } else {
+                    container.innerHTML = '<p class="muted">Навыки не найдены.</p>';
+                    badge.textContent = '0';
+                }
+            };
+
+            renderContextTags(skillContext.mandatory, 'mandatorySkills', 'mandatoryBadge');
+            renderContextTags(skillContext.preferred, 'preferredSkills', 'preferredBadge');
         }
 
         function renderKeywords(kw, total) {

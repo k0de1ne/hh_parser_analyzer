@@ -17,28 +17,85 @@ def load_vacancies(filepath: str) -> list:
 
 
 class SkillNormalizer:
-    """Automatic skill normalization using fuzzy matching"""
+    """Normalizes skills using a predefined dictionary of synonyms."""
+    
+    # This dictionary is the core of the normalization logic.
+    # Keys are variations, values are the canonical names.
+    SYNONYMS = {
+        'go': 'Golang',
+        'golang': 'Golang',
+        'go lang': 'Golang',
+        'postgresql': 'PostgreSQL',
+        'postgres': 'PostgreSQL',
+        'postgesql': 'PostgreSQL',
+        'k8s': 'Kubernetes',
+        'кубернетес': 'Kubernetes',
+        'apache kafka': 'Kafka',
+        'kafka': 'Kafka',
+        'rest api': 'REST',
+        'restful': 'REST',
+        'rest': 'REST',
+        'микросервисная архитектура': 'Microservices',
+        'микросервисы': 'Microservices',
+        'docker-compose': 'Docker',
+        'докер': 'Docker',
+        'git': 'Git',
+        'github': 'Git',
+        'gitlab': 'Git',
+        'sql': 'SQL',
+        'mysql': 'SQL',
+        'ms sql': 'SQL',
+        'linux': 'Linux/Unix',
+        'unix': 'Linux/Unix',
+        'ci/cd': 'CI/CD',
+        'gitlab ci': 'CI/CD',
+        'teamcity': 'CI/CD',
+        'jenkins': 'CI/CD',
+        'clickhouse': 'ClickHouse',
+        'хайлоад': 'Highload',
+        'высоконагруженные системы': 'Highload',
+        'rabbitmq': 'RabbitMQ',
+        'redis': 'Redis',
+        'mongodb': 'MongoDB',
+        'nosql': 'NoSQL',
+        'nginx': 'Nginx',
+        'c++': 'C/C++',
+        'c/c++': 'C/C++',
+        'c#': 'C#',
+        'python': 'Python',
+        'питон': 'Python',
+        'java': 'Java',
+        'javascript': 'JavaScript',
+        'js': 'JavaScript',
+        'typescript': 'TypeScript',
+        'ts': 'TypeScript',
+        'react': 'React',
+        'react.js': 'React',
+        'vue': 'Vue.js',
+        'vue.js': 'Vue.js',
+        'node.js': 'Node.js',
+        'nodejs': 'Node.js',
+    }
 
-    def __init__(self, threshold: float = 0.85):
-        self.threshold = threshold
-        self.canonical = {}  # maps normalized -> canonical form
-        self.skill_counts = Counter()
-
-    def normalize_all(self, all_skills: list) -> dict:
-        """Normalize all skills and return mapping"""
-        # Count raw occurrences
-        raw_counts = Counter(all_skills)
-
-        # Create canonical mapping
-        mapping = {skill: skill for skill in raw_counts.keys()}
-        self.skill_counts = raw_counts
-        self.variants = {skill: [(skill, count)] for skill, count in raw_counts.items()}
-
-        return mapping
+    def __init__(self):
+        # Pre-process synonyms for efficient lookup
+        self.mapping = {}
+        for variant, canonical in self.SYNONYMS.items():
+            # Handle cases like "C++" vs "c  "
+            processed_variant = re.sub(r'[^a-z0-9]', '', variant.lower())
+            self.mapping[processed_variant] = canonical
 
     def normalize(self, skill: str) -> str:
-        """Get canonical form of a skill"""
-        return self.canonical.get(skill, skill)
+        """Finds the canonical form of a skill."""
+        # Clean the skill name for lookup
+        processed_skill = re.sub(r'[^a-z0-9]', '', skill.lower())
+        
+        # Direct match in the synonym map
+        if processed_skill in self.mapping:
+            return self.mapping[processed_skill]
+            
+        # If no synonym found, return the original skill, capitalized for consistency
+        return skill.strip().title()
 
 
 def is_soft_skill(skill: str) -> bool:
@@ -69,67 +126,83 @@ def is_language_level(skill: str) -> bool:
     return any(re.search(p, skill, re.IGNORECASE) for p in patterns)
 
 
+def get_stop_words():
+    """Returns a set of common Russian and English stop words."""
+    russian_stop_words = [
+        'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты',
+        'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только', 'ее', 'мне', 'было', 'вот', 'от', 'о', 'мой', 'из', 'для', 'мы', 'твой',
+        'нам', 'ваш', 'их', 'еще', 'когда', 'где', 'кто', 'почему', 'чем', 'вас', 'ваша', 'наш', 'наша', 'свой', 'своя', 'сейчас',
+        'работы', 'компании', 'команда', 'команду', 'разработка', 'разработки', 'задач', 'задачи', 'сервисов', 'сервиса',
+        'продукта', 'продуктов', 'проекта', 'проектов', 'данных', 'условий', 'условия', 'требования', 'опыт', 'знание', 'умение',
+        'работа', 'работать', 'развивать', 'создавать', 'ищем', 'требуется', 'обязанности', 'ожидания', 'плюсом', 'будет'
+    ]
+    english_stop_words = [
+        'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on',
+        'that', 'the', 'to', 'was', 'were', 'will', 'with', 'we', 'you', 'our', 'your'
+    ]
+    return set(russian_stop_words + english_stop_words)
+
+
 def analyze_skills(vacancies: list) -> dict:
-    """Analyze and normalize skills"""
-    all_skills_raw = []
-    skills_by_vacancy_raw = []
+    """Categorizes skills first, then normalizes them."""
+    
+    raw_technical = []
+    raw_soft = []
+    raw_languages = []
 
+    # 1. Categorize first
     for v in vacancies:
-        skills = v.get('skills') or []
-        skills_by_vacancy_raw.append(skills)
-        all_skills_raw.extend(skills)
+        for skill in v.get('skills', []):
+            if is_language_level(skill):
+                raw_languages.append(skill)
+            elif is_soft_skill(skill):
+                raw_soft.append(skill)
+            else:
+                raw_technical.append(skill)
 
-    # Normalize skills
     normalizer = SkillNormalizer()
-    mapping = normalizer.normalize_all(all_skills_raw)
-    skill_counts = normalizer.skill_counts
 
-    # Categorize and store variants
-    technical = []
-    soft = []
-    languages = []
-    technical_variants = {}
-    soft_variants = {}
-    languages_variants = {}
+    def _normalize_category(raw_skills: list) -> dict:
+        """Helper to normalize a list of raw skills."""
+        raw_counts = Counter(raw_skills)
+        normalized_data = defaultdict(lambda: {'total_count': 0, 'variants': Counter()})
+        for skill, count in raw_counts.items():
+            canonical = normalizer.normalize(skill)
+            normalized_data[canonical]['total_count'] += count
+            normalized_data[canonical]['variants'][skill] = count
+        
+        # Sort variants inside each canonical skill
+        for canonical in normalized_data:
+            sorted_variants = sorted(normalized_data[canonical]['variants'].items(), key=lambda item: -item[1])
+            normalized_data[canonical]['variants'] = sorted_variants
+            
+        # Sort the whole dictionary by total_count
+        return dict(sorted(normalized_data.items(), key=lambda item: -item[1]['total_count']))
 
-    for skill, count in skill_counts.most_common():
-        if is_language_level(skill):
-            languages.append([skill, count])
-            if skill in normalizer.variants:
-                languages_variants[skill] = normalizer.variants[skill]
-        elif is_soft_skill(skill):
-            soft.append([skill, count])
-            if skill in normalizer.variants:
-                soft_variants[skill] = normalizer.variants[skill]
-        else:
-            technical.append([skill, count])
-            if skill in normalizer.variants:
-                technical_variants[skill] = normalizer.variants[skill]
+    technical = _normalize_category(raw_technical)
+    soft = _normalize_category(raw_soft)
+    languages = _normalize_category(raw_languages)
 
-    # Skill co-occurrence with normalized skills
+    # --- Co-occurrence Analysis (Combos) ---
     combos = Counter()
-    for raw_skills in skills_by_vacancy_raw:
-        normalized_skills = {mapping.get(s, s) for s in raw_skills}
-
-        # Filter out soft skills and language levels for co-occurrence analysis
-        unique_tech_skills = list({s for s in normalized_skills
-                                   if not is_soft_skill(s) and not is_language_level(s)})
-
-        for i, s1 in enumerate(unique_tech_skills):
-            for s2 in unique_tech_skills[i+1:]:
+    for v in vacancies:
+        # We only want technical skills for combos
+        current_raw_tech = [s for s in v.get('skills', []) if not is_soft_skill(s) and not is_language_level(s)]
+        normalized_tech_in_vacancy = {normalizer.normalize(s) for s in current_raw_tech}
+        
+        unique_list = list(normalized_tech_in_vacancy)
+        for i, s1 in enumerate(unique_list):
+            for s2 in unique_list[i+1:]:
                 pair = tuple(sorted([s1, s2]))
                 combos[pair] += 1
-
+    
     return {
         'technical': technical,
         'soft': soft,
         'languages': languages,
-        'technical_variants': technical_variants,
-        'soft_variants': soft_variants,
-        'languages_variants': languages_variants,
-        'total_mentions': len(all_skills_raw),
-        'unique_raw': len(set(all_skills_raw)),
-        'unique_normalized': len(skill_counts),
+        'total_mentions': len(raw_technical) + len(raw_soft) + len(raw_languages),
+        'unique_raw': len(Counter(raw_technical + raw_soft + raw_languages)),
+        'unique_normalized': len(technical) + len(soft) + len(languages),
         'combinations': [[list(k), v] for k, v in combos.most_common(30)]
     }
 
@@ -366,14 +439,90 @@ def analyze_descriptions(vacancies: list) -> dict:
     }
 
 
+def analyze_dynamic_keywords(vacancies: list, stop_words: set) -> dict:
+    """Extracts frequent n-grams from descriptions to find emerging keywords."""
+    bigram_counter = Counter()
+    
+    for v in vacancies:
+        desc = (v.get('description') or '').lower()
+        if not desc:
+            continue
+        
+        clean_desc = re.sub(r'<[^>]+>', '', desc) # Strip HTML tags
+        words = re.findall(r'\b[a-zа-яё-]{3,}\b', clean_desc) # Find words (at least 3 chars)
+        
+        filtered_words = [word for word in words if word not in stop_words and not is_soft_skill(word)]
+        
+        # Count bigrams (two-word phrases)
+        for i in range(len(filtered_words) - 1):
+            # We avoid bigrams where both words are the same, e.g. "go go"
+            if filtered_words[i] != filtered_words[i+1]:
+                bigram = f"{filtered_words[i]} {filtered_words[i+1]}"
+                bigram_counter[bigram] += 1
+            
+    # Filter bigrams that occur in at least 3 vacancies to reduce noise
+    meaningful_bigrams = {
+        term: count for term, count in bigram_counter.most_common(50)
+        if count >= 3
+    }
+    
+    return {
+        'top_bigrams': meaningful_bigrams
+    }
+
+
+def analyze_skill_context(vacancies: list, technical_skills: list) -> dict:
+    """Analyzes the context of skills to determine if they are mandatory or preferred."""
+    
+    mandatory_markers = [r'требуется', r'обязательно', r'необходимо', r'требования', r'нужен', r'уверенн', r'ожидаем', r'важно']
+    preferred_markers = [r'будет плюсом', r'желательно', r'преимуществом', r'как плюс', r'дополнительным', r'хорошо если', r'знакомство с']
+
+    mandatory_skills = Counter()
+    preferred_skills = Counter()
+
+    skill_names = {skill.lower() for skill in technical_skills.keys()}
+    # Add some common variations that might not be in the skills list
+    skill_names.update(['rest', 'api', 'backend', 'frontend'])
+
+
+    for v in vacancies:
+        desc = (v.get('description') or '').lower()
+        if not desc:
+            continue
+        
+        # Using a window around the skill mention can be more robust than splitting by sentence
+        for skill_name in skill_names:
+            # Use word boundaries for more precise matching
+            for match in re.finditer(r'\b' + re.escape(skill_name) + r'\b', desc):
+                # Define a window of text around the match to check for markers
+                start = max(0, match.start() - 80)
+                end = min(len(desc), match.end() + 80)
+                context_window = desc[start:end]
+
+                # Check for markers in the context window
+                if any(re.search(marker, context_window) for marker in mandatory_markers):
+                    mandatory_skills[skill_name] += 1
+                if any(re.search(marker, context_window) for marker in preferred_markers):
+                    preferred_skills[skill_name] += 1
+
+    return {
+        'mandatory': [[skill, count] for skill, count in mandatory_skills.most_common(40)],
+        'preferred': [[skill, count] for skill, count in preferred_skills.most_common(40)],
+    }
+
+
 def generate_insights(data: dict) -> list:
     """Generate actionable insights for resume building"""
     insights = []
     total_vacancies = data['meta']['total']
 
     # 1. Resume Keywords Insight
-    top_tech_skills = [s[0] for s in data['skills']['technical'][:12]]
-    top_desc_keywords = list(data['descriptions']['keywords'].keys())[:5]
+    # Check if 'descriptions' and 'keywords' exist before accessing
+    top_desc_keywords = []
+    if 'descriptions' in data and 'keywords' in data['descriptions']:
+        top_desc_keywords = list(data['descriptions']['keywords'].keys())[:5]
+
+    top_tech_skills = list(data['skills']['technical'].keys())[:12]
     resume_keywords = sorted(list(set(top_tech_skills + top_desc_keywords)), key=lambda x: x.lower())
     insights.append({
         'title': 'Ключевые слова для резюме',
@@ -383,17 +532,15 @@ def generate_insights(data: dict) -> list:
 
     # 2. Skill Combinations Insight
     combos = data['skills']['combinations'][:5]
-    combo_skills = set()
-    for pair, _ in combos:
-        combo_skills.update(pair)
-    insights.append({
-        'title': 'Частые комбинации навыков',
-        'text': 'Эти навыки часто требуются вместе. Знание этих связок — большой плюс.',
-        'items': [f"{c[0][0]} + {c[0][1]}" for c in combos]
-    })
+    if combos:
+        insights.append({
+            'title': 'Частые комбинации навыков',
+            'text': 'Эти навыки часто требуются вместе. Знание этих связок — большой плюс.',
+            'items': [f"{c[0][0]} + {c[0][1]}" for c in combos]
+        })
 
     # 3. Experience Insight
-    exp = data['experience']
+    exp = data.get('experience', {})
     if exp:
         most_common_exp = max(exp.items(), key=lambda x: x[1])
         exp_text = (f"Самое частое требование к опыту: {most_common_exp[0]} "
@@ -406,7 +553,7 @@ def generate_insights(data: dict) -> list:
         })
 
     # 4. Job Title Insight
-    roles = data['titles']['roles']
+    roles = data.get('titles', {}).get('roles', {})
     if roles:
         top_role = max(roles.items(), key=lambda x: x[1])
         role_text = (f"Большинство позиций — это '{top_role[0]}'. "
@@ -425,8 +572,9 @@ def generate_insights(data: dict) -> list:
 
 def main():
     vacancies = load_vacancies('vacancies.json')
-    print(f"Analyzing {len(vacancies)} vacancies...")
+    print(f"Analyzing {len(vacancies)} vacancies with new features...")
 
+    # --- Existing Analysis ---
     skills = analyze_skills(vacancies)
     salaries = analyze_salaries(vacancies)
     experience = analyze_experience(vacancies)
@@ -434,6 +582,11 @@ def main():
     titles = analyze_titles(vacancies)
     locations = analyze_locations(vacancies)
     descriptions = analyze_descriptions(vacancies)
+
+    # --- New Analysis ---
+    stop_words = get_stop_words()
+    dynamic_keywords = analyze_dynamic_keywords(vacancies, stop_words)
+    skill_context = analyze_skill_context(vacancies, skills.get('technical', []))
 
     data = {
         'meta': {
@@ -446,7 +599,10 @@ def main():
         'companies': companies,
         'titles': titles,
         'locations': locations,
-        'descriptions': descriptions
+        'descriptions': descriptions,
+        # --- Adding new data to the output ---
+        'dynamic_keywords': dynamic_keywords,
+        'skill_context': skill_context
     }
 
     data['insights'] = generate_insights(data)
@@ -454,7 +610,7 @@ def main():
     with open('analysis_results.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    print("Done! Results saved to analysis_results.json")
+    print("Done! Results saved to analysis_results.json with new analysis.")
 
 
 if __name__ == '__main__':

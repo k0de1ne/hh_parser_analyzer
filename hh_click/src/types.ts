@@ -38,7 +38,6 @@ export interface ParserConfig {
   delayMax: number;
   maxPages: number | null;
   outputDir: string;
-  userDataDir?: string;
 }
 
 export interface ParsingProgress {
@@ -46,4 +45,16 @@ export interface ParsingProgress {
   parsedVacancies: number;
   currentPage: number;
   totalPages: number | null;
+}
+
+export interface IgnoredVacancy {
+  id: string;
+  url: string;
+  reason: string;
+  title: string;
+}
+
+export interface SessionState {
+  appliedVacancyIds: string[];
+  ignoredVacancyIds: string[];
 }

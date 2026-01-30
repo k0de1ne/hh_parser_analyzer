@@ -17,18 +17,20 @@ export class HHParser {
       delayMax: 3000,
       maxPages: null,
       outputDir: './output',
+      userDataDir: './user_data', // Default user data directory
       ...config,
     };
   }
 
   async init(): Promise<Page> {
     console.log('Запуск браузера...');
-    this.browser = await chromium.launch({
+    const userDataDirPath = path.join(process.cwd(), this.config.userDataDir!);
+    if (!fs.existsSync(userDataDirPath)) {
+      fs.mkdirSync(userDataDirPath, { recursive: true });
+    }
+    this.context = await chromium.launchPersistentContext(userDataDirPath, {
       headless: false,
       args: ['--start-maximized'],
-    });
-
-    this.context = await this.browser.newContext({
       viewport: null,
       locale: 'ru-RU',
     });
@@ -40,8 +42,8 @@ export class HHParser {
   }
 
   async close(): Promise<void> {
-    if (this.browser) {
-      await this.browser.close();
+    if (this.context) {
+      await this.context.close();
     }
   }
 
